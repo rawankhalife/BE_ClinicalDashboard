@@ -11,6 +11,9 @@ st.set_page_config(
     page_icon="🧠"
 )
 
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
 # ---------- Styling ----------
 st.markdown("""
 <style>
@@ -19,51 +22,44 @@ st.markdown("""
     }
 
     .hero-card {
-        background: rgba(255,255,255,0.9);
-        padding: 2rem;
-        border-radius: 22px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        background: rgba(255,255,255,0.92);
+        padding: 2.2rem;
+        border-radius: 24px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.07);
         border: 1px solid rgba(0,0,0,0.05);
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
 
-    .metric-card {
-        background: white;
-        padding: 1rem 1.2rem;
-        border-radius: 18px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-        border: 1px solid rgba(0,0,0,0.05);
-    }
-
-    .upload-box {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 20px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.07);
-        border: 1px dashed #b8c7e6;
-    }
-
-    .small-muted {
+    .info-text {
         color: #5f6b7a;
-        font-size: 0.95rem;
+        font-size: 0.98rem;
+    }
+
+    .upload-panel {
+        background: rgba(255,255,255,0.92);
+        padding: 1.6rem;
+        border-radius: 24px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.07);
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .section-gap {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ---------- Helpers ----------
 def prepare_df(df):
     if df.empty:
         return df
-
     df = df.copy()
 
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_numeric(df["timestamp"], errors="coerce")
-
     if "bpm" in df.columns:
         df["bpm"] = pd.to_numeric(df["bpm"], errors="coerce")
-
     if "gsr" in df.columns:
         df["gsr"] = df["gsr"].fillna("NA").astype(str)
 
@@ -72,53 +68,49 @@ def prepare_df(df):
 
 def load_json(uploaded_file):
     try:
+        uploaded_file.seek(0)
         return json.load(uploaded_file)
     except Exception:
         return None
 
 
-def show_landing():
-    left, right = st.columns([1.2, 1], vertical_alignment="center")
-
-    with left:
-        st.markdown("""
-        <div class="hero-card">
-            <h1 style="margin-bottom:0.4rem;">VR Biofeedback Dashboard</h1>
-            <p class="small-muted" style="margin-top:0;">
-                Review patient session data from a single uploaded JSON file.
-            </p>
-            <hr style="margin:1rem 0 1.2rem 0; border:none; border-top:1px solid #e8edf5;">
-            <p>
-                This dashboard helps you inspect:
-            </p>
-            <ul>
-                <li>Baseline physiological signals</li>
-                <li>Exposure-phase heart rate trends</li>
-                <li>GSR state distribution</li>
-                <li>Session events and progression</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with right:
-        st.markdown('<div class="upload-box">', unsafe_allow_html=True)
-        st.subheader("Upload Session File")
-        uploaded_file = st.file_uploader(
-            "Choose a JSON session file",
-            type=["json"],
-            help="Upload one session JSON file to open the analysis dashboard."
-        )
-        st.markdown(
-            '<p class="small-muted">Accepted format: .json</p>',
-            unsafe_allow_html=True
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    return uploaded_file
+def reset_uploader():
+    st.session_state.uploader_key += 1
+    st.rerun()
 
 
 # ---------- Landing ----------
-uploaded_file = show_landing()
+left, right = st.columns([1.25, 1], vertical_alignment="center")
+
+with left:
+    st.markdown("""
+    <div class="hero-card">
+        <h1 style="margin-bottom:0.5rem;">VR Biofeedback Dashboard</h1>
+        <p class="info-text" style="margin-top:0;">
+            Review patient session data from a single uploaded JSON file.
+        </p>
+        <hr style="margin:1rem 0 1.2rem 0; border:none; border-top:1px solid #e8edf5;">
+        <p style="margin-bottom:0.8rem;">This dashboard helps you inspect:</p>
+        <ul style="line-height:1.9;">
+            <li>Baseline physiological signals</li>
+            <li>Exposure-phase heart rate trends</li>
+            <li>GSR state distribution</li>
+            <li>Session events and progression</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+with right:
+    st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
+    st.subheader("Upload Session File")
+    uploaded_file = st.file_uploader(
+        "Choose a JSON session file",
+        type=["json"],
+        key=f"session_uploader_{st.session_state.uploader_key}",
+        help="Upload one session JSON file to open the analysis dashboard."
+    )
+    st.caption("Accepted format: .json")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if uploaded_file is None:
     st.info("Upload a session JSON file to open the analysis page.")
@@ -141,7 +133,6 @@ if baseline_df.empty and exposure_df.empty:
 baseline_df = prepare_df(baseline_df)
 exposure_df = prepare_df(exposure_df)
 
-# ---------- Session Info ----------
 session_id = data.get("sessionId", "N/A")
 raw_date = data.get("date", "N/A")
 duration = round(float(data.get("durationSeconds", 0)), 2)
@@ -172,8 +163,8 @@ event_count = len(events_df)
 baseline_samples = len(baseline_df)
 exposure_samples = len(exposure_df)
 
-# ---------- Header ----------
 st.markdown("---")
+
 header_left, header_right = st.columns([3, 1])
 
 with header_left:
@@ -181,10 +172,10 @@ with header_left:
     st.caption(f"Loaded file: {uploaded_file.name}")
 
 with header_right:
-    if st.button("Upload Another File"):
-        st.rerun()
+    st.write("")
+    st.write("")
+    st.button("Upload Another File", on_click=reset_uploader, use_container_width=True)
 
-# ---------- Metrics ----------
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Session ID", session_id)
 c2.metric("Session Date", formatted_date)
@@ -212,7 +203,6 @@ with right:
 
 st.divider()
 
-# ---------- Interpretation ----------
 st.subheader("Session Interpretation")
 
 interpretation = "No exposure data available."
@@ -228,7 +218,6 @@ st.info(interpretation)
 
 st.divider()
 
-# ---------- Tabs ----------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Baseline Signals",
     "Exposure Signals",
