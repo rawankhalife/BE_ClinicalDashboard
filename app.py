@@ -17,35 +17,80 @@ if "uploader_key" not in st.session_state:
 # ---------- Styling ----------
 st.markdown("""
 <style>
-    .main {
-        background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+    .stApp {
+        background: linear-gradient(180deg, #eef4ff 0%, #f9fbff 100%);
+    }
+
+    h1, h2, h3 {
+        color: #1f2a44;
     }
 
     .hero-card {
-        background: rgba(255,255,255,0.92);
+        background: linear-gradient(135deg, #4f8cff 0%, #6fc3ff 100%);
+        color: white;
         padding: 2.2rem;
         border-radius: 24px;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.07);
-        border: 1px solid rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
+        box-shadow: 0 12px 30px rgba(79,140,255,0.25);
     }
 
-    .info-text {
-        color: #5f6b7a;
-        font-size: 0.98rem;
+    .hero-card p, .hero-card li {
+        color: rgba(255,255,255,0.95);
     }
 
-    .upload-panel {
-        background: rgba(255,255,255,0.92);
-        padding: 1.6rem;
-        border-radius: 24px;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.07);
-        border: 1px solid rgba(0,0,0,0.05);
+    [data-testid="stMetric"] {
+        background: white;
+        padding: 15px;
+        border-radius: 16px;
+        border-left: 5px solid #4f8cff;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.05);
     }
 
-    .section-gap {
-        margin-top: 1rem;
-        margin-bottom: 1rem;
+    .stTabs [data-baseweb="tab"] {
+        font-size: 16px;
+        padding: 10px 18px;
+        border-radius: 10px;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: #4f8cff !important;
+        color: white !important;
+    }
+
+    .stButton button {
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #4f8cff, #6fc3ff);
+        color: white;
+        font-weight: 600;
+    }
+
+    .stButton button:hover {
+        background: linear-gradient(135deg, #3b73e0, #5ab4ff);
+        color: white;
+    }
+
+    .status-pill {
+        display: inline-block;
+        padding: 0.45rem 0.9rem;
+        border-radius: 999px;
+        font-weight: 600;
+        margin-top: 0.4rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .status-green {
+        background: #e8f7ee;
+        color: #18794e;
+    }
+
+    .status-yellow {
+        background: #fff4db;
+        color: #9a6700;
+    }
+
+    .status-red {
+        background: #fdecec;
+        color: #b42318;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -54,12 +99,15 @@ st.markdown("""
 def prepare_df(df):
     if df.empty:
         return df
+
     df = df.copy()
 
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_numeric(df["timestamp"], errors="coerce")
+
     if "bpm" in df.columns:
         df["bpm"] = pd.to_numeric(df["bpm"], errors="coerce")
+
     if "gsr" in df.columns:
         df["gsr"] = df["gsr"].fillna("NA").astype(str)
 
@@ -85,11 +133,11 @@ left, right = st.columns([1.25, 1], vertical_alignment="center")
 with left:
     st.markdown("""
     <div class="hero-card">
-        <h1 style="margin-bottom:0.5rem;">VR Biofeedback Dashboard</h1>
-        <p class="info-text" style="margin-top:0;">
+        <h1 style="margin-bottom:0.5rem; color:white;">VR Biofeedback Dashboard</h1>
+        <p style="margin-top:0;">
             Review patient session data from a single uploaded JSON file.
         </p>
-        <hr style="margin:1rem 0 1.2rem 0; border:none; border-top:1px solid #e8edf5;">
+        <hr style="margin:1rem 0 1.2rem 0; border:none; border-top:1px solid rgba(255,255,255,0.25);">
         <p style="margin-bottom:0.8rem;">This dashboard helps you inspect:</p>
         <ul style="line-height:1.9;">
             <li>Baseline physiological signals</li>
@@ -101,16 +149,15 @@ with left:
     """, unsafe_allow_html=True)
 
 with right:
-    st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
-    st.subheader("Upload Session File")
-    uploaded_file = st.file_uploader(
-        "Choose a JSON session file",
-        type=["json"],
-        key=f"session_uploader_{st.session_state.uploader_key}",
-        help="Upload one session JSON file to open the analysis dashboard."
-    )
-    st.caption("Accepted format: .json")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Upload Session File")
+        uploaded_file = st.file_uploader(
+            "Choose a JSON session file",
+            type=["json"],
+            key=f"session_uploader_{st.session_state.uploader_key}",
+            help="Upload one session JSON file to open the analysis dashboard."
+        )
+        st.caption("Accepted format: .json")
 
 if uploaded_file is None:
     st.info("Upload a session JSON file to open the analysis page.")
@@ -167,9 +214,27 @@ st.markdown("---")
 
 header_left, header_right = st.columns([3, 1])
 
+status = "Stable"
+status_class = "status-green"
+status_icon = "🟢"
+
+if exposure_max_bpm != "N/A" and baseline_avg_bpm != "N/A":
+    if exposure_max_bpm >= baseline_avg_bpm * 1.4:
+        status = "High Stress"
+        status_class = "status-red"
+        status_icon = "🔴"
+    elif exposure_avg_bpm >= baseline_avg_bpm * 1.2:
+        status = "Elevated"
+        status_class = "status-yellow"
+        status_icon = "🟡"
+
 with header_left:
     st.title("Patient Session Analysis")
     st.caption(f"Loaded file: {uploaded_file.name}")
+    st.markdown(
+        f'<div class="status-pill {status_class}">{status_icon} Session Status: {status}</div>',
+        unsafe_allow_html=True
+    )
 
 with header_right:
     st.write("")
@@ -214,7 +279,12 @@ if not exposure_df.empty and baseline_avg_bpm != "N/A" and exposure_avg_bpm != "
     else:
         interpretation = "This session remained relatively close to baseline, indicating a stable response."
 
-st.info(interpretation)
+if "strong stress" in interpretation.lower():
+    st.error("🔴 " + interpretation)
+elif "elevated" in interpretation.lower():
+    st.warning("🟡 " + interpretation)
+else:
+    st.success("🟢 " + interpretation)
 
 st.divider()
 
@@ -236,7 +306,11 @@ with tab1:
             title="Baseline BPM vs Time",
             markers=False
         )
-        fig.update_layout(xaxis_title="Time (seconds)", yaxis_title="BPM")
+        fig.update_layout(
+            template="plotly_white",
+            xaxis_title="Time (seconds)",
+            yaxis_title="BPM"
+        )
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.write("No baseline BPM data available.")
@@ -252,7 +326,11 @@ with tab2:
             title="Exposure BPM vs Time",
             markers=False
         )
-        fig.update_layout(xaxis_title="Time (seconds)", yaxis_title="BPM")
+        fig.update_layout(
+            template="plotly_white",
+            xaxis_title="Time (seconds)",
+            yaxis_title="BPM"
+        )
         st.plotly_chart(fig, use_container_width=True)
 
         if "level" in exposure_df.columns:
@@ -263,7 +341,11 @@ with tab2:
                 color="systemState" if "systemState" in exposure_df.columns else None,
                 title="Exposure Level Progression"
             )
-            level_fig.update_layout(xaxis_title="Time (seconds)", yaxis_title="Level")
+            level_fig.update_layout(
+                template="plotly_white",
+                xaxis_title="Time (seconds)",
+                yaxis_title="Level"
+            )
             st.plotly_chart(level_fig, use_container_width=True)
     else:
         st.write("No exposure BPM data available.")
@@ -285,9 +367,10 @@ with tab3:
                 orientation="h",
                 title="Exposure GSR Distribution"
             )
-            fig.update_traces(textposition="outside", cliponaxis=False)
             max_count = gsr_counts["Count"].max()
+            fig.update_traces(textposition="outside", cliponaxis=False)
             fig.update_layout(
+                template="plotly_white",
                 xaxis_title="Count",
                 yaxis_title="GSR State",
                 showlegend=False,
@@ -321,6 +404,7 @@ with tab4:
                 title="Event Frequency"
             )
             fig.update_traces(textposition="outside", cliponaxis=False)
+            fig.update_layout(template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.write("No events found in this session file.")
